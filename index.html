@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video to Gif</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+
+        input[type="file"] {
+            margin: 20px;
+            padding: 10px;
+            border: 2px dashed #3498db;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 300px;
+        }
+
+        input[type="number"] {
+            margin: 10px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100px;
+        }
+
+        input[type="number"].invalid {
+            border-color: #ff6b6b;
+            background-color: #ffe9e9;
+        }
+
+        .input-error {
+            color: #ff6b6b;
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        video {
+            width: 100%;
+            max-width: 600px;
+            display: block;
+            margin: 20px auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        #gifOutput {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        canvas {
+            display: none;
+        }
+
+        .progress {
+            margin: 20px auto;
+            display: none;
+            width: 80%;
+            max-width: 400px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 20px;
+            background-color: #3498db;
+            transition: width 0.3s ease;
+        }
+
+        .controls {
+            margin: 30px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .controls label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        #generateGifBtn {
+            background-color: #3498db;
+            color: white;
+            margin-right: 10px;
+        }
+
+        #generateGifBtn:hover {
+            background-color: #2980b9;
+        }
+
+        #generateGifBtn:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        #downloadBtn {
+            margin: 20px;
+            padding: 12px 24px;
+            background-color: #2ecc71;
+            color: white;
+            display: none;
+        }
+
+        #downloadBtn:hover {
+            background-color: #27ae60;
+        }
+
+        #gifImage {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .drag-area {
+            border: 2px dashed #3498db;
+            padding: 30px;
+            border-radius: 8px;
+            background: white;
+            margin: 20px auto;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .drag-area.active {
+            border-color: #2ecc71;
+            background: #f1f9f1;
+        }
+
+        .error-message {
+            background-color: #ff6b6b;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            margin: 10px auto;
+            max-width: 400px;
+            display: none;
+        }
+    </style>
+    <!-- Add gif.js library before other scripts -->
+    <script src="gif.js"></script>
+    <script src="gif.worker.js"></script>
+</head>
+<body>
+    <h1>Chuyển đổi video thành gif</h1>
+
+    <div class="error-message" id="errorMessage"></div>
+
+    <div class="drag-area">
+        <p>Kéo và thả video vào đây hoặc</p>
+        <input type="file" id="videoInput" accept="video/*">
+    </div>
+
+    <video id="videoPlayer" controls></video>
+
+    <div class="controls">
+        <label>
+            <span>Thời gian bắt đầu (Giây)</span>
+            <input type="number" id="startTime" min="0" step="0.1" value="0">
+            <span class="input-error" id="startTimeError"></span>
+        </label>
+        <label>
+            <span>Thời lượng (Giây)</span>
+            <input type="number" id="duration" min="0.1" step="0.1" value="5">
+            <span class="input-error" id="durationError"></span>
+        </label>
+        <label>
+            <span>Frame Interval (ms)</span>
+            <input type="number" id="frameInterval" min="50" step="50" value="100">
+            <span class="input-error" id="frameIntervalError"></span>
+        </label>
+        <label>
+            <span>Chiều rộng GIF (px)</span>
+            <input type="number" id="gifWidth" min="100" step="10" value="320">
+            <span class="input-error" id="gifWidthError"></span>
+        </label>
+    </div>
+
+    <button id="generateGifBtn" disabled>Chuyển đổi qua GIF</button>
+    <button id="downloadBtn">Tải xuống GIF</button>
+    <div class="progress">
+        <div class="progress-bar"></div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="gifOutput">
+        <h2>GIF của bạn</h2>
+        <img id="gifImage" src="" alt="Gif của bạn sẽ xuất hiện ở đây">
+    </div>
+
+    <script>
+        const videoInput = document.getElementById("videoInput");
+        const videoPlayer = document.getElementById("videoPlayer");
+        const generateGifBtn = document.getElementById("generateGifBtn");
+        const downloadBtn = document.getElementById("downloadBtn");
+        const canvas = document.getElementById("canvas");
+        const gifImage = document.getElementById("gifImage");
+        const progress = document.querySelector('.progress');
+        const progressBar = document.querySelector('.progress-bar');
+        const startTimeInput = document.getElementById("startTime");
+        const durationInput = document.getElementById("duration");
+        const frameIntervalInput = document.getElementById("frameInterval");
+        const gifWidthInput = document.getElementById("gifWidth");
+        const dragArea = document.querySelector('.drag-area');
+        const errorMessage = document.getElementById("errorMessage");
+
+        const startTimeError = document.getElementById("startTimeError");
+        const durationError = document.getElementById("durationError");
+        const frameIntervalError = document.getElementById("frameIntervalError");
+        const gifWidthError = document.getElementById("gifWidthError");
+
+        function validateInputs() {
+            let isValid = true;
+            const startTime = parseFloat(startTimeInput.value);
+            const duration = parseFloat(durationInput.value);
+            const frameInterval = parseInt(frameIntervalInput.value);
+            const gifWidth = parseInt(gifWidthInput.value);
+
+            startTimeInput.classList.remove('invalid');
+            durationInput.classList.remove('invalid');
+            frameIntervalInput.classList.remove('invalid');
+            gifWidthInput.classList.remove('invalid');
+            startTimeError.style.display = 'none';
+            durationError.style.display = 'none';
+            frameIntervalError.style.display = 'none';
+            gifWidthError.style.display = 'none';
+
+            if (isNaN(startTime) || startTime < 0 || startTime >= videoPlayer.duration) {
+                startTimeInput.classList.add('invalid');
+                startTimeError.textContent = 'Thời gian bắt đầu phải từ 0 đến ' + videoPlayer.duration.toFixed(1) + ' giây';
+                startTimeError.style.display = 'block';
+                isValid = false;
+            }
+
+            if (isNaN(duration) || duration <= 0 || (startTime + duration) > videoPlayer.duration) {
+                durationInput.classList.add('invalid');
+                durationError.textContent = 'Thời lượng không hợp lệ hoặc vượt quá độ dài video';
+                durationError.style.display = 'block';
+                isValid = false;
+            }
+
+            if (isNaN(frameInterval) || frameInterval < 50 || frameInterval > 1000) {
+                frameIntervalInput.classList.add('invalid');
+                frameIntervalError.textContent = 'Frame interval phải từ 50ms đến 1000ms';
+                frameIntervalError.style.display = 'block';
+                isValid = false;
+            }
+
+            if (isNaN(gifWidth) || gifWidth < 100 || gifWidth > 1920) {
+                gifWidthInput.classList.add('invalid');
+                gifWidthError.textContent = 'Chiều rộng GIF phải từ 100px đến 1920px';
+                gifWidthError.style.display = 'block';
+                isValid = false;
+            }
+
+            return isValid;
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        dragArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dragArea.classList.add('active');
+        });
+
+        dragArea.addEventListener('dragleave', () => {
+            dragArea.classList.remove('active');
+        });
+
+        dragArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragArea.classList.remove('active');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('video/')) {
+                handleVideoFile(file);
+            } else {
+                showError('Vui lòng chọn tệp video hợp lệ');
+            }
+        });
+
+        function handleVideoFile(file) {
+            try {
+                const videoUrl = URL.createObjectURL(file);
+                videoPlayer.src = videoUrl;
+                videoPlayer.load();
+                videoPlayer.onloadedmetadata = () => {
+                    durationInput.max = videoPlayer.duration;
+                    startTimeInput.max = videoPlayer.duration - 0.1;
+                    durationInput.value = Math.min(5, videoPlayer.duration);
+                };
+                generateGifBtn.disabled = false;
+                gifImage.src = '';
+                downloadBtn.style.display = 'none';
+            } catch (error) {
+                showError('Có lỗi khi xử lý video: ' + error.message);
+            }
+        }
+
+        videoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleVideoFile(file);
+            }
+        });
+
+        [startTimeInput, durationInput, frameIntervalInput, gifWidthInput].forEach(input => {
+            input.addEventListener('input', validateInputs);
+        });
+
+        generateGifBtn.addEventListener('click', async () => {
+            try {
+                if (!validateInputs()) {
+                    throw new Error('Vui lòng kiểm tra lại các thông số đầu vào');
+                }
+
+                progress.style.display = 'block';
+                progressBar.style.width = '0%';
+                generateGifBtn.disabled = true;
+                downloadBtn.style.display = 'none';
+
+                const startTime = parseFloat(startTimeInput.value);
+                const duration = parseFloat(durationInput.value);
+                const frameInterval = parseInt(frameIntervalInput.value);
+                const gifWidth = parseInt(gifWidthInput.value);
+
+                const gif = new GIF({
+                    workers: 2,
+                    quality: 10,
+                    width: gifWidth,
+                    height: Math.floor(gifWidth * (videoPlayer.videoHeight / videoPlayer.videoWidth)),
+                    workerScript: 'gif.worker.js'
+                });
+
+                const context = canvas.getContext('2d');
+                canvas.width = videoPlayer.videoWidth;
+                canvas.height = videoPlayer.videoHeight;
+
+                videoPlayer.currentTime = startTime;
+                await new Promise(resolve => {
+                    videoPlayer.onseeked = resolve;
+                });
+
+                const endTime = Math.min(startTime + duration, videoPlayer.duration);
+                let currentTime = startTime;
+
+                while (currentTime < endTime) {
+                    context.drawImage(videoPlayer, 0, 0, canvas.width, canvas.height);
+                    gif.addFrame(canvas, {copy: true, delay: frameInterval});
+                    
+                    currentTime += frameInterval / 1000;
+                    videoPlayer.currentTime = currentTime;
+                    
+                    const percentage = Math.round(((currentTime - startTime) / duration) * 100);
+                    progressBar.style.width = `${percentage}%`;
+                    
+                    await new Promise(resolve => {
+                        videoPlayer.onseeked = resolve;
+                    });
+                }
+
+                gif.on('finished', function(blob) {
+                    const gifUrl = URL.createObjectURL(blob);
+                    gifImage.src = gifUrl;
+                    progress.style.display = 'none';
+                    generateGifBtn.disabled = false;
+                    downloadBtn.style.display = 'inline-block';
+                    downloadBtn.onclick = () => {
+                        const a = document.createElement('a');
+                        a.href = gifUrl;
+                        a.download = 'converted.gif';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    };
+                });
+
+                gif.on('error', function(error) {
+                    showError('Có lỗi khi tạo GIF: ' + error.message);
+                });
+
+                gif.render();
+            } catch (error) {
+                showError('Có lỗi xảy ra: ' + error.message);
+                progress.style.display = 'none';
+                generateGifBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
